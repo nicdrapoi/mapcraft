@@ -81,9 +81,11 @@ canvas.on('mouse:wheel', (opt) => {
   const container = canvasEl.current?.parentElement;
   if (!container) return;
   const w = container.clientWidth;
-  const h = window.innerHeight - 56; // 56px = hauteur de la toolbar
-  canvas.setWidth(w);
-  canvas.setHeight(h);
+  const h = window.innerHeight - 56;
+const containerRect = container.getBoundingClientRect();
+const w2 = containerRect.width || container.clientWidth;
+canvas.setWidth(w2 || w);
+canvas.setHeight(h);
   // Redimensionne aussi l'image de fond
   if (imgRef.current) {
     const img = imgRef.current;
