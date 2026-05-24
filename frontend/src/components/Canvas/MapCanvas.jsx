@@ -46,6 +46,16 @@ const MapCanvas = forwardRef(({
       preserveObjectStacking: true,
     });
     fabricRef.current = canvas;
+// Zoom avec la molette
+canvas.on('mouse:wheel', (opt) => {
+  const delta = opt.e.deltaY;
+  let zoom = canvas.getZoom();
+  zoom *= 0.999 ** delta;
+  zoom = Math.min(Math.max(zoom, 0.1), 10);
+  canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+  opt.e.preventDefault();
+  opt.e.stopPropagation();
+});
 
     // Chargement de l'image de fond
     if (imageUrl) {
@@ -67,13 +77,25 @@ const MapCanvas = forwardRef(({
     }
 
     // Redimensionnement responsive
-    const resize = () => {
-      const container = canvasEl.current?.parentElement;
-      if (!container) return;
-      canvas.setWidth(container.clientWidth);
-      canvas.setHeight(container.clientHeight);
-      canvas.renderAll();
-    };
+   const resize = () => {
+  const container = canvasEl.current?.parentElement;
+  if (!container) return;
+  const w = container.clientWidth;
+  const h = window.innerHeight - 56; // 56px = hauteur de la toolbar
+  canvas.setWidth(w);
+  canvas.setHeight(h);
+  // Redimensionne aussi l'image de fond
+  if (imgRef.current) {
+    const img = imgRef.current;
+    const ratio = Math.max(w / img.width, h / img.height);
+    img.scale(ratio);
+    img.set({
+      left: (w - img.getScaledWidth())  / 2,
+      top:  (h - img.getScaledHeight()) / 2,
+    });
+  }
+  canvas.renderAll();
+};
     resize();
     window.addEventListener('resize', resize);
 
