@@ -41,9 +41,14 @@ const MapCanvas = forwardRef(({
 
   // ── Initialisation Fabric.js ──────────────────────────────
   useEffect(() => {
-    const canvas = new fabric.Canvas(canvasEl.current, {
-      selection: !readOnly,
-      preserveObjectStacking: true,
+const w = canvasEl.current.parentElement.clientWidth || window.innerWidth;
+const h = window.innerHeight - 56;
+const canvas = new fabric.Canvas(canvasEl.current, {
+  selection: !readOnly,
+  preserveObjectStacking: true,
+  width: w,
+  height: h,
+});
     });
     fabricRef.current = canvas;
 // Zoom avec la molette
