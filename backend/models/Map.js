@@ -27,7 +27,7 @@ const MapSchema = new mongoose.Schema({
 
   // ── Publication ─────────────────────────────────────────────
   isPublic: { type: Boolean, default: false },
-  shareId:  shareId:  { type: String, sparse: true }, // ID court pour lien partageable
+  shareId: { type: String, sparse: true },
 
   // ── Historique des modifications ────────────────────────────
   history: [{
