@@ -1,36 +1,19 @@
-// ============================================================
-// src/components/Canvas/MapCanvas.jsx — Cœur de l'éditeur de carte
-// Fabric.js + Flood Fill + édition de polygones
-// ============================================================
-import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
+// MapCanvas.jsx — Éditeur de carte (Fabric.js + Flood Fill)
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { fabric } from 'fabric';
 import { floodFillMask, maskToPolygon } from '../../utils/floodFill';
 
-const STATUS_COLORS = {
-  ally:      '#22c55e',
-  enemy:     '#ef4444',
-  neutral:   '#94a3b8',
-  vassal:    '#f59e0b',
-  contested: '#f97316',
-  unknown:   '#3b82f6',
-};
-
 const MapCanvas = forwardRef(({
-  imageUrl,
-  regions = [],
-  readOnly = false,
-  onRegionClick,
-  onRegionCreate,
-  onRegionUpdate,
+  imageUrl, regions = [], readOnly = false,
+  onRegionClick, onRegionCreate, onRegionUpdate,
 }, ref) => {
   const canvasEl  = useRef(null);
   const fabricRef = useRef(null);
   const imgRef    = useRef(null);
-  const [mode, setMode]           = useState('select'); // 'select' | 'detect' | 'draw'
+  const imgDataRef = useRef(null); // Stocke les données pixel localement
+  const [mode, setMode]           = useState('select');
   const [detecting, setDetecting] = useState(false);
-  const [activeRegion, setActiveRegion] = useState(null);
 
-  // ── Expose des méthodes au parent ─────────────────────────
   useImperativeHandle(ref, () => ({
     setMode: (m) => setMode(m),
     getMode: () => mode,
@@ -39,24 +22,20 @@ const MapCanvas = forwardRef(({
     deselectAll: () => { fabricRef.current?.discardActiveObject(); fabricRef.current?.renderAll(); },
   }));
 
-  // ── Initialisation Fabric.js ──────────────────────────────
+  // ── Init canvas ───────────────────────────────────────────
   useEffect(() => {
-  
-    canvasEl.current.style.width = window.innerWidth + 'px';
-    canvasEl.current.style.height = (window.innerHeight - 56) + 'px';
+    const w = window.innerWidth;
+    const h = window.innerHeight - 56;
+
+    canvasEl.current.width  = w;
+    canvasEl.current.height = h;
+    canvasEl.current.style.width  = w + 'px';
+    canvasEl.current.style.height = h + 'px';
+
     const canvas = new fabric.Canvas(canvasEl.current, {
-      width: window.innerWidth,
-      height: window.innerHeight - 56,
-      width: window.innerWidth,
-      height: window.innerHeight - 56,
-      width: window.innerWidth,
-      height: window.innerHeight - 56,
-      width: window.innerWidth,
-      height: window.innerHeight - 56,
-      width: window.innerWidth,
-      height: window.innerHeight - 56,
       selection: !readOnly,
       preserveObjectStacking: true,
+      width: w, height: h,
     });
     fabricRef.current = canvas;
 
@@ -69,112 +48,92 @@ const MapCanvas = forwardRef(({
       opt.e.stopPropagation();
     });
 
-    // Chargement de l'image de fond
+    // Chargement image avec CORS
     if (imageUrl) {
-      fabric.Image.fromURL(imageUrl, (img) => {
-        imgRef.current = img;
-        const ratio  = Math.max(canvas.width / img.width, canvas.height / img.height);
-        img.scale(ratio);
-        img.set({
-          left: (canvas.width  - img.getScaledWidth())  / 2,
-          top:  (canvas.height - img.getScaledHeight()) / 2,
-          selectable: false,
-          evented: false,
-          crossOrigin: 'anonymous',
+      const htmlImg = new Image();
+      htmlImg.crossOrigin = 'anonymous';
+      htmlImg.onload = () => {
+        // Stocke les pixels AVANT que Fabric ne touche à l'image
+        const tmpC = document.createElement('canvas');
+        tmpC.width  = htmlImg.naturalWidth;
+        tmpC.height = htmlImg.naturalHeight;
+        const tmpCtx = tmpC.getContext('2d');
+        tmpCtx.drawImage(htmlImg, 0, 0);
+        try {
+          imgDataRef.current = tmpCtx.getImageData(0, 0, tmpC.width, tmpC.height);
+        } catch(e) {
+          console.warn('Impossible de lire les pixels (CORS):', e);
+        }
+
+        const fImg = new fabric.Image(htmlImg, {
+          selectable: false, evented: false,
         });
-        canvas.add(img);
-        canvas.sendToBack(img);
+        imgRef.current = fImg;
+        const ratio = Math.min(w / htmlImg.naturalWidth, h / htmlImg.naturalHeight);
+        fImg.scale(ratio);
+        fImg.set({
+          left: (w - fImg.getScaledWidth())  / 2,
+          top:  (h - fImg.getScaledHeight()) / 2,
+        });
+        canvas.add(fImg);
+        canvas.sendToBack(fImg);
         canvas.renderAll();
-      }, { crossOrigin: 'anonymous' });
+      };
+      htmlImg.onerror = () => console.error('Erreur chargement image');
+      htmlImg.src = imageUrl;
     }
 
-    // Redimensionnement responsive
     const resize = () => {
       canvas.setWidth(window.innerWidth);
       canvas.setHeight(window.innerHeight - 56);
       canvas.renderAll();
     };
-    resize();
     window.addEventListener('resize', resize);
-
-    return () => {
-      window.removeEventListener('resize', resize);
-      canvas.dispose();
-    };
+    return () => { window.removeEventListener('resize', resize); canvas.dispose(); };
   }, [imageUrl, readOnly]);
 
-  // ── Rendu des régions depuis la BDD ───────────────────────
+  // ── Rendu régions ─────────────────────────────────────────
   useEffect(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-
-    // Supprime les anciens polygones (garde l'image de fond)
-    canvas.getObjects().forEach(obj => {
-      if (obj.regionData) canvas.remove(obj);
-    });
-
-    regions.forEach(region => addRegionToCanvas(canvas, region, readOnly));
+    canvas.getObjects().forEach(obj => { if (obj.regionData) canvas.remove(obj); });
+    regions.forEach(r => addRegionToCanvas(canvas, r, readOnly));
     canvas.renderAll();
   }, [regions, readOnly]);
 
-  // ── Mode détection : clic sur canvas ─────────────────────
+  // ── Clic détection ────────────────────────────────────────
   useEffect(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-
     const handleClick = async (e) => {
       if (mode !== 'detect' || readOnly) return;
-
       const pointer = canvas.getPointer(e.e);
       const img = imgRef.current;
       if (!img) return;
-
-      // Convertit les coordonnées canvas en coordonnées image
+      const vpt = canvas.viewportTransform;
       const imgX = Math.round((pointer.x - img.left) / img.scaleX);
       const imgY = Math.round((pointer.y - img.top)  / img.scaleY);
-
       if (imgX < 0 || imgY < 0 || imgX >= img.width || imgY >= img.height) return;
-
       setDetecting(true);
-      try {
-        await detectAndCreateRegion(canvas, img, imgX, imgY, pointer);
-      } finally {
-        setDetecting(false);
-      }
+      try { await detect(canvas, img, imgX, imgY); }
+      catch(err) { alert('Erreur : ' + err.message); }
+      finally { setDetecting(false); }
     };
-
     canvas.on('mouse:down', handleClick);
     return () => canvas.off('mouse:down', handleClick);
   }, [mode, readOnly]);
 
-  // ── Détection Flood Fill + création polygone ──────────────
-  const detectAndCreateRegion = async (canvas, img, imgX, imgY, pointer) => {
-  try {
-    // Crée un canvas temporaire pour lire les pixels de l'image
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width  = img.width;
-    tempCanvas.height = img.height;
-    const ctx = tempCanvas.getContext('2d');
-
-    // Dessine l'image originale
-    const imgElement = img.getElement();
-    const imgEl = img.getElement();
-const newImg = new Image();
-newImg.crossOrigin = 'anonymous';
-newImg.src = imgEl.src + '?t=' + Date.now();
-await new Promise((res, rej) => { newImg.onload = res; newImg.onerror = rej; });
-ctx.drawImage(newImg, 0, 0, img.width, img.height);
-
-    const imageData = ctx.getImageData(0, 0, img.width, img.height);
-    const mask      = floodFillMask(imageData, imgX, imgY, 35);
-    const rawPoints = maskToPolygon(mask, img.width, img.height, 4);
-
-    if (rawPoints.length < 3) {
-      alert('Zone trop petite. Essayez ailleurs.');
+  // ── Flood Fill ────────────────────────────────────────────
+  const detect = async (canvas, img, imgX, imgY) => {
+    const imageData = imgDataRef.current;
+    if (!imageData) {
+      alert('Impossible de lire les pixels de la carte. Vérifiez que l\'image est accessible.');
       return;
     }
+    const mask      = floodFillMask(imageData, imgX, imgY, 35);
+    const rawPoints = maskToPolygon(mask, imageData.width, imageData.height, 4);
+    if (rawPoints.length < 3) { alert('Zone trop petite. Essayez ailleurs.'); return; }
 
-    // Convertit en coordonnées canvas
     const canvasPoints = rawPoints.map(p => ({
       x: p.x * img.scaleX + img.left,
       y: p.y * img.scaleY + img.top,
@@ -183,104 +142,57 @@ ctx.drawImage(newImg, 0, 0, img.width, img.height);
     const regionData = {
       _id: `new_${Date.now()}`,
       points: canvasPoints,
-      fillColor: STATUS_COLORS.unknown,
-      fillOpacity: 0.45,
-      strokeColor: '#000000',
-      strokeWidth: 1.5,
-      strokeEnabled: true,
+      fillColor: '#3b82f6', fillOpacity: 0.45,
+      strokeColor: '#000000', strokeWidth: 1.5, strokeEnabled: true,
       info: { name: '', status: 'unknown' }
     };
-
     addRegionToCanvas(canvas, regionData, false);
     canvas.renderAll();
-
     onRegionCreate && onRegionCreate(regionData);
     setMode('select');
-  } catch(err) {
-    console.error('Erreur détection:', err);
-    alert('Erreur de détection : ' + err.message);
-  }
   };
 
-  // ── Ajoute un polygone Fabric sur le canvas ───────────────
+  // ── Ajoute polygone ───────────────────────────────────────
   const addRegionToCanvas = (canvas, region, isReadOnly) => {
-    const flatPoints = region.points.flatMap(p => [p.x, p.y]);
-
     const poly = new fabric.Polygon(region.points, {
-      fill:            hexToRgba(region.fillColor || '#3b82f6', region.fillOpacity ?? 0.45),
-      stroke:          region.strokeEnabled !== false ? (region.strokeColor || '#000') : 'transparent',
-      strokeWidth:     region.strokeWidth ?? 1.5,
-      selectable:      !isReadOnly,
-      hasControls:     !isReadOnly,
-      hasBorders:      !isReadOnly,
+      fill:    hexToRgba(region.fillColor || '#3b82f6', region.fillOpacity ?? 0.45),
+      stroke:  region.strokeEnabled !== false ? (region.strokeColor || '#000') : 'transparent',
+      strokeWidth: region.strokeWidth ?? 1.5,
+      selectable: !isReadOnly, hasControls: !isReadOnly, hasBorders: !isReadOnly,
       perPixelTargetFind: true,
-      hoverCursor:     isReadOnly ? 'pointer' : 'move',
-      // Métadonnées custom
-      regionData:      { ...region },
+      hoverCursor: isReadOnly ? 'pointer' : 'move',
+      regionData: { ...region },
     });
-
-    // Clic sur une région existante
-    poly.on('mousedown', () => {
-      setActiveRegion(region);
-      onRegionClick && onRegionClick(region);
-    });
-
-    // Mise à jour après déplacement/redimension
+    poly.on('mousedown', () => { onRegionClick && onRegionClick(region); });
     if (!isReadOnly) {
       poly.on('modified', () => {
-        const updatedPoints = poly.points.map((p, i) => ({
-          x: p.x * poly.scaleX + poly.left,
-          y: p.y * poly.scaleY + poly.top,
-        }));
-        onRegionUpdate && onRegionUpdate({ ...region, points: updatedPoints });
+        const pts = poly.points.map(p => ({ x: p.x * poly.scaleX + poly.left, y: p.y * poly.scaleY + poly.top }));
+        onRegionUpdate && onRegionUpdate({ ...region, points: pts });
       });
     }
-
     canvas.add(poly);
     return poly;
   };
 
-  // ── Mise à jour de la couleur d'une région active ─────────
-  const updateActiveRegionColor = useCallback((color, opacity) => {
-    const canvas = fabricRef.current;
-    const active = canvas?.getActiveObject();
-    if (!active || !active.regionData) return;
-    active.set('fill', hexToRgba(color, opacity ?? 0.45));
-    canvas.renderAll();
-  }, []);
-
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      {/* Indicateur de mode */}
+    <div style={{ position: 'relative', width: '100vw', height: 'calc(100vh - 56px)' }}>
       {!readOnly && (
         <div className="canvas-mode-bar">
-          <button
-            className={`mode-btn ${mode === 'select' ? 'active' : ''}`}
-            onClick={() => setMode('select')}
-            title="Sélectionner / déplacer"
-          >🖱️ Sélectionner</button>
-          <button
-            className={`mode-btn ${mode === 'detect' ? 'active' : ''}`}
-            onClick={() => setMode('detect')}
-            title="Cliquer sur la carte pour détecter un pays"
-          >🪄 Détecter</button>
+          <button className={`mode-btn ${mode === 'select' ? 'active' : ''}`} onClick={() => setMode('select')}>🖱️ Sélectionner</button>
+          <button className={`mode-btn ${mode === 'detect' ? 'active' : ''}`} onClick={() => setMode('detect')}>🪄 Détecter</button>
         </div>
       )}
-
-      {/* Spinner de détection */}
       {detecting && (
         <div className="detecting-overlay">
           <div className="detecting-spinner" />
           <span>Détection en cours…</span>
         </div>
       )}
-
       <canvas ref={canvasEl} />
     </div>
   );
 });
 
-// Convertit hex + opacité → rgba
 function hexToRgba(hex, opacity = 0.5) {
   const r = parseInt(hex.slice(1,3), 16);
   const g = parseInt(hex.slice(3,5), 16);
