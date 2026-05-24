@@ -149,6 +149,7 @@ const MapCanvas = forwardRef(({
 
   // ── Détection Flood Fill + création polygone ──────────────
   const detectAndCreateRegion = async (canvas, img, imgX, imgY, pointer) => {
+  try {
     // Crée un canvas temporaire pour lire les pixels de l'image
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width  = img.width;
@@ -164,7 +165,7 @@ const MapCanvas = forwardRef(({
     const rawPoints = maskToPolygon(mask, img.width, img.height, 4);
 
     if (rawPoints.length < 3) {
-      alert('Zone trop petite ou non détectable. Essayez ailleurs.');
+      alert('Zone trop petite. Essayez ailleurs.');
       return;
     }
 
@@ -190,6 +191,10 @@ const MapCanvas = forwardRef(({
 
     onRegionCreate && onRegionCreate(regionData);
     setMode('select');
+  } catch(err) {
+    console.error('Erreur détection:', err);
+    alert('Erreur de détection : ' + err.message);
+  }
   };
 
   // ── Ajoute un polygone Fabric sur le canvas ───────────────
