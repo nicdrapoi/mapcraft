@@ -60,15 +60,6 @@ const MapCanvas = forwardRef(({
     });
     fabricRef.current = canvas;
 
-    // Zoom molette
-    canvas.on('mouse:wheel', (opt) => {
-      let zoom = canvas.getZoom() * (0.999 ** opt.e.deltaY);
-      zoom = Math.min(Math.max(zoom, 0.1), 10);
-      canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
-      opt.e.preventDefault();
-      opt.e.stopPropagation();
-    });
-
     // Chargement de l'image de fond
     if (imageUrl) {
       fabric.Image.fromURL(imageUrl, (img) => {
