@@ -85,7 +85,7 @@ canvas.on('mouse:wheel', (opt) => {
    const resize = () => {
   const container = canvasEl.current?.parentElement;
   if (!container) return;
-  const w = container.clientWidth;
+  const w = window.innerWidth;
   const h = window.innerHeight - 56;
 const containerRect = container.getBoundingClientRect();
 const w2 = containerRect.width || container.clientWidth;
