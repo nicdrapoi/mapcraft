@@ -41,7 +41,20 @@ const MapCanvas = forwardRef(({
 
   // ── Initialisation Fabric.js ──────────────────────────────
   useEffect(() => {
+  
+    canvasEl.current.style.width = window.innerWidth + 'px';
+    canvasEl.current.style.height = (window.innerHeight - 56) + 'px';
     const canvas = new fabric.Canvas(canvasEl.current, {
+      width: window.innerWidth,
+      height: window.innerHeight - 56,
+      width: window.innerWidth,
+      height: window.innerHeight - 56,
+      width: window.innerWidth,
+      height: window.innerHeight - 56,
+      width: window.innerWidth,
+      height: window.innerHeight - 56,
+      width: window.innerWidth,
+      height: window.innerHeight - 56,
       selection: !readOnly,
       preserveObjectStacking: true,
     });
@@ -68,10 +81,8 @@ const MapCanvas = forwardRef(({
 
     // Redimensionnement responsive
     const resize = () => {
-      const container = canvasEl.current?.parentElement;
-      if (!container) return;
-      canvas.setWidth(container.clientWidth);
-      canvas.setHeight(container.clientHeight);
+      canvas.setWidth(window.innerWidth);
+      canvas.setHeight(window.innerHeight - 56);
       canvas.renderAll();
     };
     resize();
