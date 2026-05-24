@@ -41,26 +41,11 @@ const MapCanvas = forwardRef(({
 
   // ── Initialisation Fabric.js ──────────────────────────────
   useEffect(() => {
-const w = canvasEl.current.parentElement.clientWidth || window.innerWidth;
-const h = window.innerHeight - 56;
-const canvas = new fabric.Canvas(canvasEl.current, {
-  selection: !readOnly,
-  preserveObjectStacking: true,
-  width: w,
-  height: h,
-});
+    const canvas = new fabric.Canvas(canvasEl.current, {
+      selection: !readOnly,
+      preserveObjectStacking: true,
     });
     fabricRef.current = canvas;
-// Zoom avec la molette
-canvas.on('mouse:wheel', (opt) => {
-  const delta = opt.e.deltaY;
-  let zoom = canvas.getZoom();
-  zoom *= 0.999 ** delta;
-  zoom = Math.min(Math.max(zoom, 0.1), 10);
-  canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
-  opt.e.preventDefault();
-  opt.e.stopPropagation();
-});
 
     // Chargement de l'image de fond
     if (imageUrl) {
@@ -82,27 +67,13 @@ canvas.on('mouse:wheel', (opt) => {
     }
 
     // Redimensionnement responsive
-   const resize = () => {
-  const container = canvasEl.current?.parentElement;
-  if (!container) return;
-  const w = window.innerWidth;
-  const h = window.innerHeight - 56;
-const containerRect = container.getBoundingClientRect();
-const w2 = containerRect.width || container.clientWidth;
-canvas.setWidth(w2 || w);
-canvas.setHeight(h);
-  // Redimensionne aussi l'image de fond
-  if (imgRef.current) {
-    const img = imgRef.current;
-    const ratio = Math.max(w / img.width, h / img.height);
-    img.scale(ratio);
-    img.set({
-      left: (w - img.getScaledWidth())  / 2,
-      top:  (h - img.getScaledHeight()) / 2,
-    });
-  }
-  canvas.renderAll();
-};
+    const resize = () => {
+      const container = canvasEl.current?.parentElement;
+      if (!container) return;
+      canvas.setWidth(container.clientWidth);
+      canvas.setHeight(container.clientHeight);
+      canvas.renderAll();
+    };
     resize();
     window.addEventListener('resize', resize);
 
