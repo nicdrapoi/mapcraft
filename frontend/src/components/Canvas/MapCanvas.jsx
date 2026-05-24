@@ -51,7 +51,7 @@ const MapCanvas = forwardRef(({
     if (imageUrl) {
       fabric.Image.fromURL(imageUrl, (img) => {
         imgRef.current = img;
-        const ratio  = Math.min(canvas.width / img.width, canvas.height / img.height);
+        const ratio  = Math.max(canvas.width / img.width, canvas.height / img.height);
         img.scale(ratio);
         img.set({
           left: (canvas.width  - img.getScaledWidth())  / 2,
