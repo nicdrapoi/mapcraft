@@ -158,7 +158,12 @@ const MapCanvas = forwardRef(({
 
     // Dessine l'image originale
     const imgElement = img.getElement();
-    ctx.drawImage(imgElement, 0, 0, img.width, img.height);
+    const imgEl = img.getElement();
+const newImg = new Image();
+newImg.crossOrigin = 'anonymous';
+newImg.src = imgEl.src + '?t=' + Date.now();
+await new Promise((res, rej) => { newImg.onload = res; newImg.onerror = rej; });
+ctx.drawImage(newImg, 0, 0, img.width, img.height);
 
     const imageData = ctx.getImageData(0, 0, img.width, img.height);
     const mask      = floodFillMask(imageData, imgX, imgY, 35);
